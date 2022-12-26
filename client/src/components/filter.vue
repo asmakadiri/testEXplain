@@ -18,10 +18,8 @@
         <v-card-title>
           <v-btn plain @click="sendRenitialiser">Rénitialiser</v-btn>
         </v-card-title>
-
       </v-col>
     </v-row>
-
     <v-treeview
         class = "treeview"
         selectable

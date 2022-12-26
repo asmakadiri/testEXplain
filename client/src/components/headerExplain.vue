@@ -9,15 +9,14 @@
 <template>
   <div>
     <v-app-bar
-        color="#F57F17"
+        color="#E64A19"
         dense
-
     >
       <img src = '../assets/logoExplain.png' class="img"/>
       <v-tabs>
         <v-tab>ACCEUIL</v-tab>
         <v-spacer></v-spacer>
-        <v-tab>Options</v-tab>
+        <v-tab>Aide</v-tab>
         <v-tab>Log Out</v-tab>
 
       </v-tabs>
