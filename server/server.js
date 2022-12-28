@@ -10,10 +10,13 @@ app.use(express.json())
 app.use(cors())
 
 const jsonDataTerritories = require("./ressources/territories.json")
-const jsonTerritoriParent = require('./ressources/territory_parents.json')
+const jsonterritoriesByParent = require('./ressources/territory_parents.json')
 
 
 
+/**
+ * cette fonction sert à regrouper les données selon le parent-id
+ */
 function groupBy(items, key){
     let result =items.reduce(
         (result, item) => ({
@@ -28,7 +31,11 @@ function groupBy(items, key){
     return result
 }
 
-function linkTerritoriesAndTerritoriesPrent(tabCHildren,dataTerritories){
+/**
+ *cette fonction sert à prendre le tableau de children d'un territory est retourner le même tableau mais avec les données
+ * de fichiers territories.json
+ */
+function equivalentTerritoriesParentInTerritories(tabCHildren,dataTerritories){
     let dataChildren = []
     tabCHildren.forEach((child)=>{
         if(dataTerritories[child["child_id"]]){
@@ -38,30 +45,39 @@ function linkTerritoriesAndTerritoriesPrent(tabCHildren,dataTerritories){
     return dataChildren
 }
 
-//trouver les informations des child-ids d'un item dans le territoriesFile
-function findChildInTerritoriesfile(dataTerritories,territoriParent,key){
+/**
+ * cette fonction prend un element de territoriesByParent d'indice key qui est sous la forme de {parent-id : [child1,child2,...]} 
+ * et vérifier si un child à aussi des enfants (ex : si le child est un EPCI alors ce child est le père de plusieurs communes)
+ * si oui chercher l'équivalents de ce child dans le dossier territories.json et ajouter le champs children avec les donneés des enfants
+ */
+function buildTheArchitectorOfChildren(dataTerritories,territoriesByParent,key){
     let children = [];
-    territoriParent[key].forEach((child)=>{
+    territoriesByParent[key].forEach((child)=>{
         if(dataTerritories[child["child_id"]]){
-            if(!Object.keys(territoriParent).includes(child["child_id"])){
+            if(!Object.keys(territoriesByParent).includes(child["child_id"])){
                 children.push(dataTerritories[child["child_id"]][0])
             }
             else{
                     children.push({...dataTerritories[child["child_id"]][0],
-                        ...{'children' :linkTerritoriesAndTerritoriesPrent(territoriParent[child["child_id"]],dataTerritories,territoriParent) }})
-                    findChildInTerritoriesfile(dataTerritories,territoriParent,child["child_id"])
+                        ...{'children' :equivalentTerritoriesParentInTerritories(territoriesByParent[child["child_id"]],dataTerritories,territoriesByParent) }})
+                buildTheArchitectorOfChildren(dataTerritories,territoriesByParent,child["child_id"])
             }
 
         }
     })
     return children;
 }
-function isDepartementOrCommune(dataTerritories,territoriParent,type){
+
+/**
+ * cette fonction sert à prendre un élément de niveau supérieur(ici on prend type = FRDEPA mais on peut prendre un niveau plus haut) et retourner
+ * un ojbet des données de cet element avec le champs children sous la forme d'un arbre.
+ */
+function buildTheArchitectorOfTerritory(dataTerritories,territoriesByParent,type){
     let dataOfKeyItem = [];
-    Object.keys(territoriParent).forEach((key)=>{
+    Object.keys(territoriesByParent).forEach((key)=>{
         if(dataTerritories[key] && dataTerritories[key][0]["kind"]){
             if(dataTerritories[key][0]["kind"] === type){
-                let children = findChildInTerritoriesfile(dataTerritories,territoriParent,key);
+                let children = buildTheArchitectorOfChildren(dataTerritories,territoriesByParent,key);
                 dataOfKeyItem.push({...dataTerritories[key][0],...{"children" : children}})
             }
         }
@@ -72,10 +88,10 @@ function isDepartementOrCommune(dataTerritories,territoriParent,type){
 
 app.get("/", cors(), async (req,res) =>{
 
-    if(jsonDataTerritories && jsonTerritoriParent ){
-        let territoriParentGroupedByParent = groupBy(jsonTerritoriParent, "parent_id"); // grouper les données selon le parent-id
+    if(jsonDataTerritories && jsonterritoriesByParent ){
+        let territoriesByParentGroupedByParent = groupBy(jsonterritoriesByParent, "parent_id"); // grouper les données selon le parent-id
         let dataTerritoriesGroupedById = groupBy(jsonDataTerritories, "id");
-        let territoriesWithChildren =  isDepartementOrCommune( dataTerritoriesGroupedById,territoriParentGroupedByParent,'FRDEPA')
+        let territoriesWithChildren =  buildTheArchitectorOfTerritory( dataTerritoriesGroupedById,territoriesByParentGroupedByParent,'FRDEPA')
         console.log("length",territoriesWithChildren.length)
         res.send(territoriesWithChildren)
     }
@@ -84,7 +100,7 @@ app.get("/", cors(), async (req,res) =>{
 
 app.post("/selectedData", cors(), async (req,res) =>{
     let selectedTerritories = [];
-    if(jsonDataTerritories && jsonTerritoriParent ){
+    if(jsonDataTerritories && jsonterritoriesByParent ){
         let filters = req.body;
         let dataTerritoriesGroupedById = groupBy(jsonDataTerritories, "id");
         filters.forEach((item)=>{
